@@ -1,0 +1,13 @@
+
+// Add after ComplianceDocument model
+model ComplianceRequirement {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        String   // "RIGHT_TO_WORK", "HMRC_STARTER", "GDPR_CONSENT", "PENSION_AUTO_ENROLLMENT"
+  region      String   // "UK", "US", "EU"
+  required    Boolean  @default(true)
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

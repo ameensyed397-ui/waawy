@@ -1,0 +1,199 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String     @id @default(cuid())
+  name      String
+  industry  String?
+  workModel WorkModel?
+  size      String?
+  location  String?
+  region    String? // "UK", "US", "EU", etc. for compliance presets
+
+  // Workspace preferences
+  timezone       String? // IANA timezone (e.g., "Europe/London", "America/New_York")
+  currency       String? // ISO 4217 code (e.g., "GBP", "EUR", "USD")
+  fiscalYearStart Int?   // Month number 1-12 (e.g., 4 for April, 1 for January)
+  workWeekStart  String? // Day of week (e.g., "MONDAY", "SUNDAY")
+
+  // Onboarding tracking
+  onboardingStatus   OnboardingStatus @default(NOT_STARTED)
+  onboardingStep     Int              @default(1)
+  complianceComplete Boolean          @default(false)
+  setupComplete      Boolean          @default(false)
+  lastSavedStep      Int? // For save & continue
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees              Employee[]
+  invites                Invite[]
+  complianceRequirements ComplianceRequirement[]
+  leavePolicies          LeavePolicy[]
+}
+
+enum WorkModel {
+  REMOTE
+  HYBRID
+  OFFICE
+}
+
+model Employee {
+  id               String           @id @default(cuid())
+  clerkUserId      String           @unique
+  companyId        String
+  firstName        String
+  lastName         String
+  email            String           @unique
+  profilePicture   String? // URL to profile photo
+  jobTitle         String? // e.g., "Senior Engineer", "Product Designer"
+  role             EmployeeRole     @default(EMPLOYEE)
+  department       String?
+  startDate        DateTime?
+  onboardingStatus OnboardingStatus @default(PENDING)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  onboardingTasks OnboardingTask[]
+  complianceDocs  ComplianceDocument[]
+}
+
+enum EmployeeRole {
+  FOUNDER
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+model OnboardingTask {
+  id          String          @id @default(cuid())
+  employeeId  String
+  phase       OnboardingPhase
+  title       String
+  description String?
+  status      TaskStatus      @default(PENDING)
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+enum OnboardingPhase {
+  PRE_ONBOARDING
+  DURING_ONBOARDING
+  POST_ONBOARDING
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model ComplianceDocument {
+  id          String         @id @default(cuid())
+  employeeId  String
+  type        ComplianceType
+  status      DocumentStatus @default(PENDING)
+  documentUrl String?
+  expiryDate  DateTime?
+  verifiedAt  DateTime?
+  verifiedBy  String?
+  createdAt   DateTime       @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+enum ComplianceType {
+  RIGHT_TO_WORK
+  HMRC_STARTER
+  GDPR_CONSENT
+}
+
+enum DocumentStatus {
+  PENDING
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+model Invite {
+  id         String       @id @default(cuid())
+  companyId  String
+  email      String
+  role       EmployeeRole @default(EMPLOYEE)
+  token      String       @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime     @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ComplianceRequirement {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type      String // "RIGHT_TO_WORK", "HMRC_STARTER", "GDPR_CONSENT", "PENSION_AUTO_ENROLLMENT"
+  region    String // "UK", "US", "EU"
+  required  Boolean  @default(true)
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LeavePolicy {
+  id              String   @id @default(cuid())
+  companyId       String
+  name            String // "Annual Leave", "Sick Leave", "Parental Leave"
+  emoji           String? // "🏖️", "🤒", "👶"
+  allowanceDays   Float // Number of days per year (e.g., 28 for UK annual leave)
+  carryoverDays   Float    @default(0) // How many days can carry over to next year
+  requiresApproval Boolean @default(true)
+  paidLeave       Boolean  @default(true)
+  description     String?
+  isStatutory     Boolean  @default(false) // True for legally required leave types
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ── Poll Responses ───────────────────────────────────────
+model PollResponse {
+  id        String   @id @default(cuid())
+  vote      String   // poll option id (e.g., "onboarding", "culture")
+  roast     String?  // optional free-text feedback
+  createdAt DateTime @default(now())
+}
+
+// ── Waitlist ──────────────────────────────────────────────
+model Waitlist {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  emailSent   Boolean  @default(false)
+  surveyDone  Boolean  @default(false)
+  source      String?  @default("landing_page")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
